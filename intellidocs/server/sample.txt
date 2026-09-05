@@ -1,0 +1,1 @@
+IntelliDocs is an agentic RAG research assistant. It allows users to upload documents and ask questions about them. The system uses retrieval-augmented generation to provide grounded answers with citations. The architecture consists of three services: a React frontend, an Express backend, and a Python FastAPI AI microservice.

@@ -1,0 +1,52 @@
+{
+  "api_provider": "groq",
+  "ollama_model": "llama3.1:8b",
+  "api_results": [
+    {
+      "question": "What is IntelliDocs?",
+      "answer": null,
+      "citations_count": 0,
+      "confidence": null,
+      "latency_seconds": 23.782,
+      "validation_success": false,
+      "validation_error": "Error code: 400 - {'error': {'message': 'The model `mixtral-8x7b-32768` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}"
+    },
+    {
+      "question": "How does the document ingestion process work?",
+      "answer": null,
+      "citations_count": 0,
+      "confidence": null,
+      "latency_seconds": 4.582,
+      "validation_success": false,
+      "validation_error": "Error code: 400 - {'error': {'message': 'The model `mixtral-8x7b-32768` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}"
+    },
+    {
+      "question": "What vector store does IntelliDocs use?",
+      "answer": null,
+      "citations_count": 0,
+      "confidence": null,
+      "latency_seconds": 4.594,
+      "validation_success": false,
+      "validation_error": "Error code: 400 - {'error': {'message': 'The model `mixtral-8x7b-32768` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}"
+    },
+    {
+      "question": "Explain the RAG chain architecture.",
+      "answer": null,
+      "citations_count": 0,
+      "confidence": null,
+      "latency_seconds": 4.558,
+      "validation_success": false,
+      "validation_error": "Error code: 400 - {'error': {'message': 'The model `mixtral-8x7b-32768` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}"
+    },
+    {
+      "question": "What are the main components of the IntelliDocs system?",
+      "answer": null,
+      "citations_count": 0,
+      "confidence": null,
+      "latency_seconds": 4.601,
+      "validation_success": false,
+      "validation_error": "Error code: 400 - {'error': {'message': 'The model `mixtral-8x7b-32768` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.', 'type': 'invalid_request_error', 'code': 'model_decommissioned'}}"
+    }
+  ],
+  "ollama_results": []
+}

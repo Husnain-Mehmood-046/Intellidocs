@@ -1,0 +1,217 @@
+# IntelliDocs - Full Stack Docker Compose
+#
+# Services:
+# - ai-service: Python FastAPI (port 8000) - ML/RAG microservice
+# - server: Node.js Express (port 5000) - Auth, chat history, API proxy
+# - client: React/Vite + nginx (port 80) - Frontend
+# - mongodb: MongoDB (port 27017) - Database
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose up --build     # Rebuild and start
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop and remove
+#   docker-compose down -v        # Stop and remove + volumes (data loss!)
+#
+# Environment:
+#   Copy .env.example files to .env in each service directory before running
+#   Or set environment variables in this file (not recommended for secrets)
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # MongoDB Database
+  # =============================================================================
+  mongodb:
+    image: mongo:7-jammy
+    container_name: intellidocs-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: intellidocs
+      # For production, use MONGO_INITDB_ROOT_USERNAME/PASSWORD from secrets
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - intellidocs-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # =============================================================================
+  # Ollama (Optional - for Linux users or when not using Docker Desktop)
+  # =============================================================================
+  # Uncomment this service if running on Linux without Docker Desktop,
+  # or if you want to run Ollama in Docker instead of on the host.
+  # Then set OLLAMA_BASE_URL=http://ollama:11434 in ai-service environment.
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: intellidocs-ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - intellidocs-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+
+  # =============================================================================
+  # AI Service (Python FastAPI)
+  # =============================================================================
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: intellidocs-ai-service
+    restart: unless-stopped
+    environment:
+      # Core config
+      - EMBEDDING_MODEL=all-MiniLM-L6-v2
+      - DATA_DIR=/app/data
+      - CHROMA_DIR=/app/chroma_db
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - RETRIEVAL_MODE=${RETRIEVAL_MODE:-vector}
+      - TOP_K=4
+      
+      # LLM Provider keys (from .env or GitHub secrets)
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.1-8b-instant}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-haiku-latest}
+      
+      # Ollama (for local/finetuned models)
+      # NOTE: host.docker.internal only works on Docker Desktop (Mac/Windows).
+      # On Linux, either:
+      #   a) Run Ollama in a separate container (see ollama service below, uncomment to use)
+      #   b) Use host network mode: network_mode: "host" (but loses Docker network isolation)
+      #   c) Set OLLAMA_BASE_URL to your host's LAN IP
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - FINETUNED_MODEL=${FINETUNED_MODEL:-intellidocs-finetuned}
+      
+      # MongoDB connection
+      - MONGODB_URI=mongodb://mongodb:27017/intellidocs
+      
+      # CORS - comma-separated list of allowed origins
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost
+      
+      # Python settings
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ai_service_data:/app/data
+      - ai_service_chroma:/app/chroma_db
+      - ai_service_finetune:/app/finetune
+    networks:
+      - intellidocs-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =============================================================================
+  # Server (Node.js Express)
+  # =============================================================================
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: intellidocs-server
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/intellidocs
+      - AI_SERVICE_URL=http://ai-service:8000
+      - JWT_SECRET=${JWT_SECRET}
+      # CORS - comma-separated list of allowed origins (client URLs)
+      # In Docker, the client is served by nginx on port 80
+      - CLIENT_URL=http://client,http://localhost,http://localhost:5173,http://localhost:3000
+    ports:
+      - "5000:5000"
+    networks:
+      - intellidocs-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # =============================================================================
+  # Client (React/Vite + nginx)
+  # =============================================================================
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: intellidocs-client
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    ports:
+      - "80:80"
+      - "5173:80"  # Alternative port for direct access
+    networks:
+      - intellidocs-network
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  intellidocs-network:
+    driver: bridge
+    name: intellidocs-network
+
+# =============================================================================
+# Volumes (persist data across container restarts)
+# =============================================================================
+volumes:
+  mongodb_data:
+    name: intellidocs-mongodb-data
+  mongodb_config:
+    name: intellidocs-mongodb-config
+  ai_service_data:
+    name: intellidocs-ai-service-data
+  ai_service_chroma:
+    name: intellidocs-ai-service-chroma
+  ai_service_finetune:
+    name: intellidocs-ai-service-finetune
+  ollama_data:
+    name: intellidocs-ollama-data

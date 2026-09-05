@@ -1,0 +1,58 @@
+# --- Node.js ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Environment files ---
+.env
+.env.local
+.env.*.local
+
+# --- AI service data & vector store (local persistence) ---
+ai-service/data/
+ai-service/faiss_index/
+ai-service/chroma_db/
+
+# --- Fine-tuning artifacts (large files) ---
+ai-service/finetune/lora_adapter/
+ai-service/finetune/gguf_model/
+ai-service/finetune/dataset.jsonl
+*.gguf
+*.bin
+
+# --- Evaluation reports ---
+ai-service/eval/eval_report_*.json
+
+# --- Docker volumes & build ---
+.docker/
+docker-compose.override.yml
+
+# --- Modal ---
+.modal/
+
+# --- Build output ---
+dist/
+build/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Logs ---
+*.log
+
+# --- IDE/Editor specific ---
+*.swp
+*.swo
+*~

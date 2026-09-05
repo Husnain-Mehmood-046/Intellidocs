@@ -1,0 +1,134 @@
+{
+  "test_cases": [
+    {
+      "id": "rag_001",
+      "category": "rag",
+      "question": "What is the main topic of the ingested document?",
+      "expected_path": "rag",
+      "expected_answer_contains": ["document", "topic", "main"],
+      "description": "Straightforward RAG question about document content"
+    },
+    {
+      "id": "rag_002",
+      "category": "rag",
+      "question": "Summarize the key findings from the report.",
+      "expected_path": "rag",
+      "expected_answer_contains": ["findings", "summary", "key"],
+      "description": "RAG question asking for summary of document"
+    },
+    {
+      "id": "rag_003",
+      "category": "rag",
+      "question": "What methodology was used in the study?",
+      "expected_path": "rag",
+      "expected_answer_contains": ["methodology", "method", "study", "used"],
+      "description": "RAG question about methodology"
+    },
+    {
+      "id": "rag_004",
+      "category": "rag",
+      "question": "List the authors of the document.",
+      "expected_path": "rag",
+      "expected_answer_contains": ["author", "writer"],
+      "description": "RAG question about document metadata"
+    },
+    {
+      "id": "rag_005",
+      "category": "rag",
+      "question": "What are the conclusions of the research?",
+      "expected_path": "rag",
+      "expected_answer_contains": ["conclusion", "result", "finding"],
+      "description": "RAG question about conclusions"
+    },
+    {
+      "id": "tool_001",
+      "category": "tool",
+      "question": "Search for information about machine learning in the knowledge base.",
+      "expected_path": "tool",
+      "expected_tool": "search_documents",
+      "description": "Explicit search request should trigger search_documents tool"
+    },
+    {
+      "id": "tool_002",
+      "category": "tool",
+      "question": "Look up metadata for the document 'sample.txt'.",
+      "expected_path": "tool",
+      "expected_tool": "lookup_metadata",
+      "description": "Explicit metadata lookup request"
+    },
+    {
+      "id": "tool_003",
+      "category": "tool",
+      "question": "How many chunks does the file 'report.pdf' have?",
+      "expected_path": "tool",
+      "expected_tool": "lookup_metadata",
+      "description": "Question about chunk count should trigger lookup_metadata"
+    },
+    {
+      "id": "clarify_001",
+      "category": "clarify",
+      "question": "Tell me about it.",
+      "expected_path": "clarify",
+      "description": "Vague pronoun reference needs clarification"
+    },
+    {
+      "id": "clarify_002",
+      "category": "clarify",
+      "question": "What about the other thing?",
+      "expected_path": "clarify",
+      "description": "Ambiguous reference needs clarification"
+    },
+    {
+      "id": "clarify_003",
+      "category": "clarify",
+      "question": "Explain.",
+      "expected_path": "clarify",
+      "description": "Single word query is too vague"
+    },
+    {
+      "id": "trick_001",
+      "category": "trick",
+      "question": "What is the capital of France?",
+      "expected_path": "clarify",
+      "expected_answer_contains": ["don't know", "not in", "knowledge base", "clarify"],
+      "description": "General knowledge question not in documents - should clarify or say don't know"
+    },
+    {
+      "id": "trick_002",
+      "category": "trick",
+      "question": "Who won the 2024 Nobel Prize in Physics?",
+      "expected_path": "clarify",
+      "expected_answer_contains": ["don't know", "not in", "knowledge base", "clarify", "url", "link"],
+      "description": "Current events question - agent should ask for URL to fetch web page"
+    },
+    {
+      "id": "trick_003",
+      "category": "trick",
+      "question": "What does the document say about quantum computing?",
+      "expected_path": "rag",
+      "expected_answer_contains": ["not found", "don't know", "no information", "quantum"],
+      "description": "Question about topic not in documents - should say don't know"
+    },
+    {
+      "id": "trick_004",
+      "category": "trick",
+      "question": "Search for the latest AI news from today.",
+      "expected_path": "clarify",
+      "expected_answer_contains": ["don't know", "not in", "knowledge base", "clarify", "url", "link"],
+      "description": "Current news request - agent should ask for URL to fetch web page"
+    },
+    {
+      "id": "rag_006",
+      "category": "rag",
+      "question": "What are the main challenges mentioned in the document?",
+      "expected_path": "rag",
+      "expected_answer_contains": ["challenge", "difficulty", "problem", "issue"],
+      "description": "RAG question about challenges/problems"
+    }
+  ],
+  "metadata": {
+    "created": "2026-09-03",
+    "version": "1.0",
+    "description": "Test set for IntelliDocs agent evaluation (Week 3)"
+  }
+}

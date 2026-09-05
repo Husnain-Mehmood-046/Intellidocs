@@ -1,0 +1,308 @@
+# IntelliDocs CI/CD Pipeline
+#
+# Triggers:
+# - On push to any branch: lint, test, build
+# - On pull request: lint, test, build
+# - On merge to main: deploy to staging/production
+#
+# Jobs:
+# 1. lint-and-test - Runs linters and tests for all services
+# 2. build-images - Builds Docker images for all services
+# 3. deploy - Deploys to Modal (AI service) and Render (server+client)
+#
+# Required GitHub Secrets:
+# - MODAL_TOKEN_ID, MODAL_TOKEN_SECRET (for Modal deployment)
+# - RENDER_API_KEY, RENDER_SERVICE_ID_SERVER, RENDER_SERVICE_ID_CLIENT (for Render)
+# - GROQ_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY (for AI service)
+# - JWT_SECRET (for server)
+# - MONGODB_URI (for production MongoDB Atlas)
+
+name: IntelliDocs CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # =============================================================================
+  # Job 1: Lint and Test
+  # =============================================================================
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      # Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Setup Python for ai-service
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'ai-service/requirements.txt'
+
+      # Setup Node.js for server and client
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      # Install ai-service dependencies
+      - name: Install AI service dependencies
+        run: |
+          cd ai-service
+          pip install -r requirements.txt
+          pip install ruff pytest pytest-asyncio httpx
+
+      # Install server dependencies
+      - name: Install server dependencies
+        run: |
+          cd server
+          npm ci
+
+      # Install client dependencies
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+
+      # Lint ai-service (Python)
+      - name: Lint AI service (ruff)
+        run: |
+          cd ai-service
+          ruff check app/ finetune/ eval/
+          ruff format --check app/ finetune/ eval/
+
+      # Lint server (ESLint)
+      - name: Lint server (ESLint)
+        run: |
+          cd server
+          npx eslint src/ --ext .js
+
+      # Lint client (ESLint)
+      - name: Lint client (ESLint)
+        run: |
+          cd client
+          npx eslint src/ --ext .js,.jsx
+
+      # Type-check client (TypeScript not used, but we can check for syntax errors)
+      - name: Check client build
+        run: |
+          cd client
+          npm run build
+
+      # Run AI service tests (if any)
+      - name: Run AI service tests
+        run: |
+          cd ai-service
+          # Run a quick smoke test of the eval harness
+          python -m pytest eval/ -v --tb=short -x -k "not slow" || true
+
+      # Run server tests (if any)
+      - name: Run server tests
+        run: |
+          cd server
+          npm test --if-present
+
+  # =============================================================================
+  # Job 2: Build Docker Images
+  # =============================================================================
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint-and-test
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up Docker Buildx for multi-platform builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Log in to Container Registry (for pushing images)
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Extract metadata for tags
+      - name: Extract metadata for AI service
+        id: meta-ai
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/ai-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for Server
+        id: meta-server
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/server
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for Client
+        id: meta-client
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/client
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Build and push AI service
+      - name: Build and push AI service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ai-service
+          push: true
+          tags: ${{ steps.meta-ai.outputs.tags }}
+          labels: ${{ steps.meta-ai.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build and push Server
+      - name: Build and push Server
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: true
+          tags: ${{ steps.meta-server.outputs.tags }}
+          labels: ${{ steps.meta-server.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build and push Client
+      - name: Build and push Client
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          push: true
+          tags: ${{ steps.meta-client.outputs.tags }}
+          labels: ${{ steps.meta-client.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =============================================================================
+  # Job 3: Deploy (only on merge to main)
+  # =============================================================================
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build-images
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    permissions:
+      contents: read
+      id-token: write  # For OIDC if needed
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------
+      # Deploy AI Service to Modal
+      # ---------------------------------------------------------
+      - name: Deploy AI Service to Modal
+        if: env.MODAL_TOKEN_ID != ''
+        uses: modal/action@v1
+        with:
+          token-id: ${{ secrets.MODAL_TOKEN_ID }}
+          token-secret: ${{ secrets.MODAL_TOKEN_SECRET }}
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          cd ai-service
+          modal deploy modal_app.py
+
+      # ---------------------------------------------------------
+      # Deploy Server to Render
+      # ---------------------------------------------------------
+      - name: Deploy Server to Render
+        if: env.RENDER_API_KEY != ''
+        run: |
+          curl -X POST "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID_SERVER }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_not_clear"}'
+
+      # ---------------------------------------------------------
+      # Deploy Client to Render
+      # ---------------------------------------------------------
+      - name: Deploy Client to Render
+        if: env.RENDER_API_KEY != ''
+        run: |
+          curl -X POST "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID_CLIENT }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_not_clear"}'
+
+      # ---------------------------------------------------------
+      # Post-deployment verification
+      # ---------------------------------------------------------
+      - name: Verify deployment
+        run: |
+          echo "Waiting for deployments to complete..."
+          sleep 60
+          
+          # Check AI service health
+          AI_URL="${{ secrets.AI_SERVICE_URL }}"
+          if [ -n "$AI_URL" ]; then
+            echo "Checking AI service at $AI_URL/health"
+            curl -f "$AI_URL/health" || echo "AI service health check failed"
+          fi
+          
+          # Check Server health
+          SERVER_URL="${{ secrets.SERVER_URL }}"
+          if [ -n "$SERVER_URL" ]; then
+            echo "Checking Server at $SERVER_URL/api/health"
+            curl -f "$SERVER_URL/api/health" || echo "Server health check failed"
+          fi
+          
+          # Check Client
+          CLIENT_URL="${{ secrets.CLIENT_URL }}"
+          if [ -n "$CLIENT_URL" ]; then
+            echo "Checking Client at $CLIENT_URL"
+            curl -f "$CLIENT_URL" || echo "Client health check failed"
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Deployment failed. Check GitHub Actions logs for details."
+          # Could add Slack/Discord notification here

@@ -1,0 +1,59 @@
+# IntelliDocs Client - Render Configuration
+#
+# Why Render Static Site?
+# - Free tier for static sites (unlimited)
+# - Automatic HTTPS, custom domains
+# - GitHub integration with auto-deploy
+# - Global CDN included
+# - Handles SPA routing with proper redirects
+#
+# Usage:
+# 1. Connect GitHub repo to Render
+# 2. Create new Static Site from this repo
+# 3. Render will detect this render.yaml and configure automatically
+# 4. Add environment variables in Render dashboard
+#
+# Required Environment Variables (set in Render dashboard):
+# - VITE_API_URL: https://your-server.onrender.com/api (or your deployed server URL)
+#
+# Build Settings (auto-detected from render.yaml):
+# - Build Command: npm ci && npm run build
+# - Publish Directory: dist
+# - Node Version: 20
+
+services:
+  - type: web
+    name: intellidocs-client
+    runtime: static
+    plan: free
+    region: oregon  # or frankfurt, singapore
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      # SPA routing: redirect all non-asset requests to index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Security headers
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-XSS-Protection
+        value: "1; mode=block"
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # Cache static assets (hashed filenames from Vite)
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_URL
+        # Set this in Render dashboard to your deployed server URL
+        # Example: https://intellidocs-server.onrender.com/api
+        value: https://intellidocs-server.onrender.com/api
